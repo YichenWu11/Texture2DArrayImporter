@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 28e5860ac9e6be94cb3e750b3ba1fa52
+ScriptedImporter:
+  internalIDToNameTable: []
+  externalObjects: {}
+  serializedVersion: 2
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+  script: {fileID: 11500000, guid: 1483bb3862e716b458ad89617959d667, type: 3}
+  tex2DArray: {fileID: 18700000, guid: 19e2e6135fe0fe24e8691fc46eb2f6ed, type: 2}
+  wrapMode: 0
+  filterMode: 1
+  anisoLevel: 1
+  isReadable: 0
