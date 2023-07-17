@@ -3,7 +3,9 @@ using System.IO;
 using UnityEditor;
 using UnityEditor.AssetImporters;
 using UnityEngine;
+using Unity.Mathematics;
 using UnityEngine.Experimental.Rendering;
+using UnityEngine.Experimental.Rendering.RenderGraphModule;
 using Object = UnityEngine.Object;
 
 namespace Util
@@ -15,6 +17,8 @@ namespace Util
     {
         // File Extension For Texture2DArray assets
         public const string k_FileExtension = "tex2darray";
+
+        public Texture2D debug;
 
         // Version Number For Importer
         private const int k_VersionNumber = 0;
@@ -37,25 +41,64 @@ namespace Util
 
         [SerializeField] private bool m_IsReadable;
 
-        public TextureWrapMode wrapMode { get; set; }
+        public TextureWrapMode wrapMode
+        {
+            get => m_WrapMode;
+            set => m_WrapMode = value;
+        }
 
-        public FilterMode filterMode { get; set; }
+        public FilterMode filterMode
+        {
+            get => m_FilterMode;
+            set => m_FilterMode = value;
+        }
 
-        public int anisoLevel { get; set; }
+        public int anisoLevel
+        {
+            get => m_AnisoLevel;
+            set => m_AnisoLevel = value;
+        }
 
-        public bool isReadable { get; set; }
+        public bool isReadable
+        {
+            get => m_IsReadable;
+            set => m_IsReadable = value;
+        }
+
+        #region Platform Settings
+
+        [Serializable]
+        public class Texture2DArrayImporterPlatformSettings
+        {
+            public int maxSize = 8192; // max texture size
+            public TextureResizeAlgorithm resizeAlgorithm;
+            public TextureFormat format;
+            public TextureCompressionQuality compression; // compression quality
+            public bool isOverrideEnabled;
+        }
+
+        // 默认设置
+        [SerializeField] private Texture2DArrayImporterPlatformSettings defaultSettings;
+
+        // For Windows, Mac, Linux
+        [SerializeField] private Texture2DArrayImporterPlatformSettings platformSettingsForWindows;
+
+        // For Dedicated Server
+        [SerializeField] private Texture2DArrayImporterPlatformSettings platformSettingsForDedicatedServer;
+
+        // For Android
+        [SerializeField] private Texture2DArrayImporterPlatformSettings platformSettingsForAndroid;
+
+        #endregion
 
         public override void OnImportAsset(AssetImportContext ctx)
         {
-            // var assetPath = Path.ChangeExtension(ctx.assetPath, ".asset");
-
-            // Object assetObject = AssetDatabase.LoadAssetAtPath<Object>(assetPath);
-            // Texture2D myObject = assetObject as Texture2D;
+            #region Initial Texture2DArray Null Handling
 
             if (m_Tex2DArray == null)
             {
                 ctx.LogImportWarning("The Initial Texture2DArray asset Can not be null!!!");
-                m_Tex2DArray = new Texture2DArray(256, 256, 1,
+                var errorTex2DArray = new Texture2DArray(256, 256, 1,
                     GraphicsFormat.B8G8R8A8_UNorm,
                     TextureCreationFlags.None);
                 var errorTexture =
@@ -69,68 +112,51 @@ namespace Util
                     errorTexture.Apply();
 
                     for (var n = 0; n < m_Tex2DArray.depth; ++n)
-                        Graphics.CopyTexture(errorTexture, 0, m_Tex2DArray, n);
+                        Graphics.CopyTexture(errorTexture, 0, errorTex2DArray, n);
                 }
                 finally
                 {
                     DestroyImmediate(errorTexture);
                 }
 
-                ctx.AddObjectToAsset("Texture2DArray", m_Tex2DArray);
-                ctx.SetMainObject(m_Tex2DArray);
+                ctx.AddObjectToAsset("Texture2DArray", errorTex2DArray);
+                ctx.SetMainObject(errorTex2DArray);
 
                 return;
             }
+
+            #endregion
 
             var path = AssetDatabase.GetAssetPath(m_Tex2DArray);
             ctx.DependsOnSourceAsset(path);
 
             // Process Texture2DArray asset
-            ProcessTexture2DArrayBySettings();
+            var tex2DArray = ProcessTexture2DArrayBySettings();
 
-            ctx.AddObjectToAsset("Texture2DArray", m_Tex2DArray);
-            ctx.SetMainObject(m_Tex2DArray);
+            ctx.AddObjectToAsset("Texture2DArray", tex2DArray);
+            ctx.SetMainObject(tex2DArray);
         }
 
-        // 获取指定平台的纹理导入设置
-        private TextureImporterPlatformSettings GetPlatformTexture2DArraySetting(string platform)
+        private Texture2DArray ProcessTexture2DArrayBySettings()
         {
-            throw new NotImplementedException();
-        }
+            var srgb = true;
 
-        private void ProcessTexture2DArrayBySettings()
-        {
-            var width = m_Tex2DArray.width;
-            var height = m_Tex2DArray.height;
-            var mipmapEnabled = true;
-            var textureFormat = m_Tex2DArray.format;
-            var srgbTexture = true;
+            var tex2DArray = Texture2DArrayImporterUtil.CloneTexture2DArray(m_Tex2DArray, m_IsReadable, srgb);
+            tex2DArray.wrapMode = m_WrapMode;
+            tex2DArray.filterMode = m_FilterMode;
+            tex2DArray.anisoLevel = m_AnisoLevel;
 
-            throw new NotImplementedException();
-        }
+            tex2DArray =
+                Texture2DArrayImporterUtil.CompressTexture2DArray(
+                    tex2DArray, TextureFormat.DXT5,
+                    TextureCompressionQuality.Normal);
 
-        private Texture2DArray ConvertTextureArrayToFormat(Texture2DArray sourceArray, GraphicsFormat format)
-        {
-            var width = sourceArray.width;
-            var height = sourceArray.height;
-            var depth = sourceArray.depth;
-
-            // Create a new Texture2DArray with the specified format
-            var newArray = new Texture2DArray(width, height, depth, format, TextureCreationFlags.MipChain);
-
-            // Copy the textures from the source array to the new array
-            for (var i = 0; i < depth; i++) Graphics.CopyTexture(sourceArray, i, 0, newArray, i, 0);
-
-            // Apply the changes
-            newArray.Apply(false, true);
-
-            return newArray;
+            return tex2DArray;
         }
 
         [MenuItem("Assets/Create/Texture2D Array", priority = 310)]
         private static void CreateTexture2DArrayMenuItem()
         {
-            // https://forum.unity.com/threads/how-to-implement-create-new-asset.759662/
             var directoryPath = "Assets";
             foreach (var obj in Selection.GetFiltered(typeof(Object), SelectionMode.Assets))
             {
