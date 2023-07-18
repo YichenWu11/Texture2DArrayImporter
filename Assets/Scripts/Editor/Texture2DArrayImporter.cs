@@ -18,8 +18,6 @@ namespace Util
         // File Extension For Texture2DArray assets
         public const string k_FileExtension = "tex2darray";
 
-        public Texture2D debug;
-
         // Version Number For Importer
         private const int k_VersionNumber = 0;
 
@@ -39,7 +37,11 @@ namespace Util
         [SerializeField]
         private int m_AnisoLevel = 1;
 
-        [SerializeField] private bool m_IsReadable;
+        [Tooltip("Enable to be able to access the raw pixel data from code.")] [SerializeField]
+        private bool m_IsReadable;
+
+        [Tooltip("Texture2DArray contents is stored in gamma space.")] [SerializeField]
+        private bool m_sRGB = true;
 
         public TextureWrapMode wrapMode
         {
@@ -71,9 +73,9 @@ namespace Util
         public class Texture2DArrayImporterPlatformSettings
         {
             public int maxSize = 8192; // max texture size
-            public TextureResizeAlgorithm resizeAlgorithm;
-            public TextureFormat format;
-            public TextureCompressionQuality compression; // compression quality
+            public TextureResizeAlgorithm resizeAlgorithm = TextureResizeAlgorithm.Mitchell;
+            public TextureFormat format = TextureFormat.RGBA32;
+            public TextureCompressionQuality compression = TextureCompressionQuality.Normal; // compression quality
             public bool isOverrideEnabled;
         }
 
@@ -81,13 +83,13 @@ namespace Util
         [SerializeField] private Texture2DArrayImporterPlatformSettings defaultSettings;
 
         // For Windows, Mac, Linux
-        [SerializeField] private Texture2DArrayImporterPlatformSettings platformSettingsForWindows;
+        [SerializeField] private Texture2DArrayImporterPlatformSettings platformSettingsForStandalone; // WIN,OSX,Linux
 
         // For Dedicated Server
-        [SerializeField] private Texture2DArrayImporterPlatformSettings platformSettingsForDedicatedServer;
+        [SerializeField] private Texture2DArrayImporterPlatformSettings platformSettingsForIOS; // IOS
 
         // For Android
-        [SerializeField] private Texture2DArrayImporterPlatformSettings platformSettingsForAndroid;
+        [SerializeField] private Texture2DArrayImporterPlatformSettings platformSettingsForAndroid; // Android
 
         #endregion
 
@@ -111,7 +113,7 @@ namespace Util
                     errorTexture.SetPixels32(errorPixels);
                     errorTexture.Apply();
 
-                    for (var n = 0; n < m_Tex2DArray.depth; ++n)
+                    for (var n = 0; n < errorTex2DArray.depth; ++n)
                         Graphics.CopyTexture(errorTexture, 0, errorTex2DArray, n);
                 }
                 finally
@@ -139,17 +141,46 @@ namespace Util
 
         private Texture2DArray ProcessTexture2DArrayBySettings()
         {
-            var srgb = true;
+            // 先 Resize，再 Compress
+            var maxSize = defaultSettings.maxSize;
+            var resizeAlgo = defaultSettings.resizeAlgorithm;
+            var format = defaultSettings.format;
+            var compression = defaultSettings.compression;
 
-            var tex2DArray = Texture2DArrayImporterUtil.CloneTexture2DArray(m_Tex2DArray, m_IsReadable, srgb);
+#if UNITY_STANDALONE
+            if (platformSettingsForStandalone.isOverrideEnabled)
+            {
+                maxSize = platformSettingsForStandalone.maxSize;
+                resizeAlgo = platformSettingsForStandalone.resizeAlgorithm;
+                format = platformSettingsForStandalone.format;
+                compression = platformSettingsForStandalone.compression;
+            }
+#elif UNITY_ANDROID
+            if (platformSettingsForAndroid.isOverrideEnabled)
+            {
+                maxSize = platformSettingsForAndroid.maxSize;
+                resizeAlgo = platformSettingsForAndroid.resizeAlgorithm;
+                format = platformSettingsForAndroid.format;
+                compression = platformSettingsForAndroid.compression;
+            }
+#elif UNITY_IOS
+            if (platformSettingsForIOS.isOverrideEnabled)
+            {
+                maxSize = platformSettingsForIOS.maxSize;
+                resizeAlgo = platformSettingsForIOS.resizeAlgorithm;
+                format = platformSettingsForIOS.format;
+                compression = platformSettingsForIOS.compression;
+            }
+#endif
+
+            var tex2DArray =
+                Texture2DArrayImporterUtil.ProcessTexture2DArray(
+                    m_Tex2DArray, format, compression, maxSize, resizeAlgo, m_sRGB);
             tex2DArray.wrapMode = m_WrapMode;
             tex2DArray.filterMode = m_FilterMode;
             tex2DArray.anisoLevel = m_AnisoLevel;
 
-            tex2DArray =
-                Texture2DArrayImporterUtil.CompressTexture2DArray(
-                    tex2DArray, TextureFormat.DXT5,
-                    TextureCompressionQuality.Normal);
+            tex2DArray.Apply(false, !isReadable);
 
             return tex2DArray;
         }

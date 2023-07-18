@@ -6,6 +6,7 @@ using UnityEngine.Experimental.Rendering;
 public class Test : MonoBehaviour
 {
     public Texture2DArray mips;
+    public Texture2DArray debugArray;
     public Texture2D[] textures;
     public Texture2D debug;
 
@@ -14,9 +15,14 @@ public class Test : MonoBehaviour
         LoadTexture2DArray();
         // Test Resize
         // debug = ResizeTextureWithBilinear(textures[0], textures[0].width / 4, textures[0].height / 4);
+        // debug = ResizeTextureWithMitchell(textures[0], textures[0].width / 4, textures[0].height / 4);
         // Test Convert Texture Format
         // debug = ConvertTextureToFormat(textures[0], GraphicsFormat.R8G8B8A8_SRGB);
         // mips = ConvertTextureArrayToFormat(mips, GraphicsFormat.R8G8B8A8_SRGB);
+        // Debug.Log(debugArray.isReadable ? "Readable" : "Not Readable");
+        // Debug.Log(debugArray.anisoLevel);
+        // Debug.Log(debugArray.wrapMode);
+        // Debug.Log(debugArray.filterMode);
     }
 
     // private Texture2DArray ConvertTextureArrayToFormat(Texture2DArray sourceArray, GraphicsFormat format)
@@ -98,7 +104,7 @@ public class Test : MonoBehaviour
 
         mips.Apply();
 
-        var outputPath = "Assets/Textures/1.asset";
+        var outputPath = "Assets/Textures/2.asset";
         AssetDatabase.CreateAsset(mips, outputPath);
     }
 
@@ -257,16 +263,4 @@ public class Test : MonoBehaviour
     }
 
     #endregion
-}
-
-public static class Texture2DArrayExtensions
-{
-    public static Texture2D ToTexture2D(this Texture2DArray textureArray, int index)
-    {
-        var creationFlags = textureArray.mipmapCount > 1 ? TextureCreationFlags.MipChain : TextureCreationFlags.None;
-        var texture = new Texture2D(textureArray.width, textureArray.height, textureArray.graphicsFormat,
-            creationFlags);
-        Graphics.CopyTexture(textureArray, index, texture, 0);
-        return texture;
-    }
 }

@@ -1,29 +1,62 @@
 using System;
-using Unity.VisualScripting;
 using UnityEditor;
 using UnityEngine;
-using UnityEngine.Experimental.Rendering;
 
 namespace Util
 {
     public static class Texture2DArrayImporterUtil
     {
-        public static Texture2DArray CompressTexture2DArray(
+        public static Texture2DArray ProcessTexture2DArray(
             Texture2DArray sourceArray,
             TextureFormat format,
-            TextureCompressionQuality compressionQuality)
+            TextureCompressionQuality compressionQuality,
+            int maxSize,
+            TextureResizeAlgorithm resizeAlgo,
+            bool srgb)
+        {
+            Texture2DArray tex2DArray = null;
+            // Resize
+            if (sourceArray.width > maxSize || sourceArray.height > maxSize)
+            {
+                if (IsCompressedFormat(sourceArray.format))
+                {
+                    tex2DArray = CompressTexture2DArray(
+                        sourceArray, TextureFormat.RGBA32, compressionQuality, srgb);
+                    tex2DArray = ResizeTexture2DArray(
+                        tex2DArray, maxSize, maxSize, resizeAlgo, srgb);
+                    tex2DArray = CompressTexture2DArray(
+                        tex2DArray, sourceArray.format, compressionQuality, srgb);
+                }
+                else
+                {
+                    tex2DArray = ResizeTexture2DArray(
+                        sourceArray, maxSize, maxSize, resizeAlgo, srgb);
+                }
+            }
+
+            // Compress
+            tex2DArray = CompressTexture2DArray(
+                tex2DArray == null ? sourceArray : tex2DArray, format, compressionQuality, srgb);
+            return tex2DArray;
+        }
+
+        private static Texture2DArray CompressTexture2DArray(
+            Texture2DArray sourceArray,
+            TextureFormat format,
+            TextureCompressionQuality compressionQuality,
+            bool srgb)
         {
             var width = sourceArray.width;
             var height = sourceArray.height;
             var depth = sourceArray.depth;
+            var mipmapEnabled = sourceArray.mipmapCount > 1;
 
-            // Create a new Texture2DArray with the target format
-            var newArray = new Texture2DArray(width, height, depth, format, sourceArray.mipmapCount > 1);
+            var newArray = new Texture2DArray(width, height, depth, format, mipmapEnabled, !srgb);
 
             for (var i = 0; i < depth; i++)
             for (var mip = 0; mip < sourceArray.mipmapCount; mip++)
             {
-                var sourceMipTexture = sourceArray.ToTexture2D(i);
+                var sourceMipTexture = sourceArray.ToTexture2D(i, srgb);
                 EditorUtility.CompressTexture(sourceMipTexture, format, compressionQuality);
                 Graphics.CopyTexture(sourceMipTexture, 0, newArray, i);
             }
@@ -31,118 +64,77 @@ namespace Util
             return newArray;
         }
 
-        #region Clone Texture2DArray
-
-        public static Texture2DArray CloneTexture2DArray(
+        private static Texture2DArray ResizeTexture2DArray(
             Texture2DArray sourceArray,
-            bool isReadable = true,
-            bool srgbTexture = true)
+            int width, int height,
+            TextureResizeAlgorithm resizeAlgo,
+            bool srgb)
         {
-            var width = sourceArray.width;
-            var height = sourceArray.height;
             var depth = sourceArray.depth;
-            var format = sourceArray.format;
             var mipmapEnabled = sourceArray.mipmapCount > 1;
 
-            // Create a new Texture2DArray with the same dimensions and format as the source array
-            var newArray = new Texture2DArray(width, height, depth, format, mipmapEnabled, !srgbTexture);
+            var newArray = new Texture2DArray(width, height, depth, sourceArray.format, mipmapEnabled, !srgb);
 
-            // Copy the textures from the source array to the new array
             for (var i = 0; i < depth; i++)
             {
-                Graphics.CopyTexture(sourceArray, i, 0, newArray, i, 0);
-                if (!mipmapEnabled) continue;
-                for (var mip = 1; mip < sourceArray.mipmapCount; ++mip)
-                    Graphics.CopyTexture(sourceArray, i, mip, newArray, i, mip);
+                var sourceTexture = sourceArray.ToTexture2D(i, srgb);
+                var resizedTexture = ResizeTexture(sourceTexture, width, height, resizeAlgo, srgb);
+                Graphics.CopyTexture(resizedTexture, 0, newArray, i);
             }
-
-            // Apply the changes
-            newArray.Apply(mipmapEnabled, isReadable);
 
             return newArray;
         }
 
-        #endregion
-
         #region Resize Algorithm
 
-        public static Texture2D ResizeTexture(
+        private static Texture2D ResizeTexture(
             Texture2D sourceTexture,
             int width, int height,
-            TextureResizeAlgorithm resizeAlgo)
+            TextureResizeAlgorithm resizeAlgo, bool srgb)
         {
             return resizeAlgo switch
             {
-                TextureResizeAlgorithm.Mitchell => ResizeTextureWithMitchell(sourceTexture, width, height),
-                TextureResizeAlgorithm.Bilinear => ResizeTextureWithBilinear(sourceTexture, width, height),
+                TextureResizeAlgorithm.Mitchell => ResizeTextureWithMitchell(sourceTexture, width, height, srgb),
+                TextureResizeAlgorithm.Bilinear => ResizeTextureWithBilinear(sourceTexture, width, height, srgb),
                 _ => throw new ArgumentOutOfRangeException(nameof(resizeAlgo), resizeAlgo, null)
             };
         }
 
-        private static Texture2D ResizeTextureWithBilinear(Texture2D sourceTexture, int width, int height)
+        private static Texture2D ResizeTextureWithBilinear(
+            Texture2D sourceTexture,
+            int width, int height,
+            bool srgb)
         {
-            // Create a new Texture2D with mipmaps
-            var resizedTexture = new Texture2D(width, height, sourceTexture.format, sourceTexture.mipmapCount > 1);
+            var mipmapEnabled = sourceTexture.mipmapCount > 1;
 
-            var mipCount = Mathf.Min(sourceTexture.mipmapCount, resizedTexture.mipmapCount);
+            var rtTemp = RenderTexture.GetTemporary(sourceTexture.width, sourceTexture.height);
+            Graphics.Blit(sourceTexture, rtTemp);
 
-            for (var mip = 0; mip < mipCount; mip++)
-            {
-                var mipWidth = Mathf.Max(width >> mip, 1);
-                var mipHeight = Mathf.Max(height >> mip, 1);
+            var rt = RenderTexture.GetTemporary(width, height);
+            rt.filterMode = sourceTexture.filterMode;
 
-                var sourceMipWidth = Mathf.Max(sourceTexture.width >> mip, 1);
-                var sourceMipHeight = Mathf.Max(sourceTexture.height >> mip, 1);
+            Graphics.Blit(rtTemp, rt);
 
-                var scaleX = (float)sourceTexture.width / mipWidth;
-                var scaleY = (float)sourceTexture.height / mipHeight;
-
-                var sourceMipPixels = sourceTexture.GetPixels(mip);
-                var resizedMipPixels = new Color[mipWidth * mipHeight];
-
-                for (var y = 0; y < mipHeight; y++)
-                for (var x = 0; x < mipWidth; x++)
-                {
-                    var u = (x + 0.5f) * scaleX - 0.5f;
-                    var v = (y + 0.5f) * scaleY - 0.5f;
-
-                    var x1 = Mathf.Clamp(Mathf.FloorToInt(u), 0, sourceTexture.width - 1);
-                    var x2 = Mathf.Clamp(Mathf.CeilToInt(u), 0, sourceTexture.width - 1);
-                    var y1 = Mathf.Clamp(Mathf.FloorToInt(v), 0, sourceTexture.height - 1);
-                    var y2 = Mathf.Clamp(Mathf.CeilToInt(v), 0, sourceTexture.height - 1);
-
-                    var p1 = GetPixel(sourceMipPixels, Mathf.Clamp(x1, 0, sourceMipWidth - 1),
-                        Mathf.Clamp(y1, 0, sourceMipHeight - 1), sourceMipWidth);
-                    var p2 = GetPixel(sourceMipPixels, Mathf.Clamp(x2, 0, sourceMipWidth - 1),
-                        Mathf.Clamp(y1, 0, sourceMipHeight - 1), sourceMipWidth);
-                    var p3 = GetPixel(sourceMipPixels, Mathf.Clamp(x1, 0, sourceMipWidth - 1),
-                        Mathf.Clamp(y2, 0, sourceMipHeight - 1), sourceMipWidth);
-                    var p4 = GetPixel(sourceMipPixels, Mathf.Clamp(x2, 0, sourceMipWidth - 1),
-                        Mathf.Clamp(y2, 0, sourceMipHeight - 1), sourceMipWidth);
-
-                    var dx = u - x1;
-                    var dy = v - y1;
-
-                    var pixelColor = Color.Lerp(Color.Lerp(p1, p2, dx), Color.Lerp(p3, p4, dx), dy);
-                    resizedMipPixels[y * mipWidth + x] = pixelColor;
-                }
-
-                resizedTexture.SetPixels(resizedMipPixels, mip);
-            }
-
+            var resizedTexture = new Texture2D(width, height, sourceTexture.format, mipmapEnabled, !srgb);
+            RenderTexture.active = rt;
+            resizedTexture.ReadPixels(new Rect(0, 0, width, height), 0, 0);
             resizedTexture.Apply();
+
+            RenderTexture.ReleaseTemporary(rtTemp);
+            RenderTexture.ReleaseTemporary(rt);
+            RenderTexture.active = null;
+
             return resizedTexture;
         }
 
-        private static Color GetPixel(Color[] pixels, int x, int y, int width)
-        {
-            return pixels[y * width + x];
-        }
-
-        private static Texture2D ResizeTextureWithMitchell(Texture2D sourceTexture, int width, int height)
+        private static Texture2D ResizeTextureWithMitchell(
+            Texture2D sourceTexture,
+            int width, int height,
+            bool srgb)
         {
             // Create a new Texture2D with mipmaps
-            var resizedTexture = new Texture2D(width, height, sourceTexture.format, sourceTexture.mipmapCount > 1);
+            var mipmapEnabled = sourceTexture.mipmapCount > 1;
+            var resizedTexture = new Texture2D(width, height, sourceTexture.format, mipmapEnabled, !srgb);
 
             var mipCount = Mathf.Min(sourceTexture.mipmapCount, resizedTexture.mipmapCount);
 
@@ -174,7 +166,6 @@ namespace Util
                 resizedTexture.SetPixels(resizedMipPixels, mip);
             }
 
-            resizedTexture.Apply();
             return resizedTexture;
         }
 
@@ -188,15 +179,12 @@ namespace Util
             for (var j = -1; j <= 2; j++)
             {
                 var y = y1 + j;
-
                 for (var i = -1; i <= 2; i++)
                 {
                     var x = x1 + i;
-
                     var pixel = texture.GetPixel(Mathf.Clamp(x, 0, texture.width - 1),
                         Mathf.Clamp(y, 0, texture.height - 1));
                     var weight = Mitchell1D(u - x, B, C) * Mitchell1D(v - y, B, C);
-
                     result += pixel * weight;
                 }
             }
@@ -218,19 +206,52 @@ namespace Util
         }
 
         #endregion
+
+        private static bool IsCompressedFormat(TextureFormat format)
+        {
+            switch (format)
+            {
+                case TextureFormat.DXT1:
+                case TextureFormat.DXT5:
+                case TextureFormat.BC4:
+                case TextureFormat.BC5:
+                case TextureFormat.BC6H:
+                case TextureFormat.BC7:
+                case TextureFormat.RGBA4444:
+                case TextureFormat.RGBA32:
+                case TextureFormat.PVRTC_RGB2:
+                case TextureFormat.PVRTC_RGBA2:
+                case TextureFormat.PVRTC_RGB4:
+                case TextureFormat.PVRTC_RGBA4:
+                case TextureFormat.ETC_RGB4:
+                case TextureFormat.EAC_R:
+                case TextureFormat.EAC_R_SIGNED:
+                case TextureFormat.EAC_RG:
+                case TextureFormat.EAC_RG_SIGNED:
+                case TextureFormat.ETC2_RGB:
+                case TextureFormat.ETC2_RGBA1:
+                case TextureFormat.ETC2_RGBA8:
+                case TextureFormat.ASTC_4x4:
+                case TextureFormat.ASTC_5x5:
+                case TextureFormat.ASTC_6x6:
+                case TextureFormat.ASTC_8x8:
+                case TextureFormat.ASTC_10x10:
+                case TextureFormat.ASTC_12x12:
+                    return true;
+
+                default:
+                    return false;
+            }
+        }
     }
 
     public static class Texture2DArrayExtensions
     {
-        public static Texture2D ToTexture2D(this Texture2DArray textureArray, int index)
+        public static Texture2D ToTexture2D(this Texture2DArray textureArray, int index, bool srgb)
         {
-            var width = Mathf.Max(textureArray.width, 1);
-            var height = Mathf.Max(textureArray.height, 1);
-            var format = textureArray.format;
-
-            var texture = new Texture2D(width, height, format, textureArray.mipmapCount > 1);
+            var texture = new Texture2D(textureArray.width, textureArray.height, textureArray.format,
+                textureArray.mipmapCount > 1, !srgb);
             Graphics.CopyTexture(textureArray, index, texture, 0);
-
             return texture;
         }
     }

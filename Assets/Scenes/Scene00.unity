@@ -437,7 +437,7 @@ MeshRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 2100000, guid: 31321ba15b8f8eb4c954353edc038b1d, type: 2}
+  - {fileID: 2100000, guid: 3ee237b1fe17b914a87d92154cea87d3, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
@@ -495,9 +495,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   mips: {fileID: 0}
+  debugArray: {fileID: -7639397621201060638, guid: 28e5860ac9e6be94cb3e750b3ba1fa52, type: 3}
   textures:
-  - {fileID: 2800000, guid: ea6803faac2e9194c8737a6e39f76731, type: 3}
-  - {fileID: 2800000, guid: db1f0b026803f634cb219f0f09b854d4, type: 3}
-  - {fileID: 2800000, guid: d1c767dbea8c67a45b92a27dbd08bdf4, type: 3}
-  - {fileID: 2800000, guid: 91463d030187e984ca34edb5a868f000, type: 3}
+  - {fileID: 2800000, guid: 91a683223b7726f4da75f9334bdd6daf, type: 3}
   debug: {fileID: 0}
