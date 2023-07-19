@@ -1,0 +1,59 @@
+fileFormatVersion: 2
+guid: 28e5860ac9e6be94cb3e750b3ba1fa52
+ScriptedImporter:
+  internalIDToNameTable: []
+  externalObjects: {}
+  serializedVersion: 2
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+  script: {fileID: 11500000, guid: 1483bb3862e716b458ad89617959d667, type: 3}
+  tex2DArray: {fileID: 18700000, guid: e6310feca4c0c494993ac2f621da0c08, type: 2}
+  wrapMode: 2
+  filterMode: 1
+  anisoLevel: 1
+  isReadable: 0
+  sRGB: 1
+  defaultSettings:
+    maxSize: 8192
+    resizeAlgorithm: 0
+    format: 4
+    compression: 50
+    isOverrideEnabled: 0
+  platformSettingsForStandalone:
+    maxSize: 512
+    resizeAlgorithm: 0
+    format: 25
+    compression: 50
+    isOverrideEnabled: 1
+  platformSettingsForIOS:
+    maxSize: 8192
+    resizeAlgorithm: 0
+    format: 4
+    compression: 50
+    isOverrideEnabled: 0
+  platformSettingsForAndroid:
+    maxSize: 512
+    resizeAlgorithm: 0
+    format: 45
+    compression: 50
+    isOverrideEnabled: 1
+  maxSizeDefault: 8192
+  resizeAlgorithmDefault: 0
+  formatDefault: 4
+  compressionDefault: 50
+  maxSizeStandalone: 512
+  resizeAlgorithmStandalone: 0
+  formatStandalone: 25
+  compressionStandalone: 50
+  isOverrideEnabledStandalone: 1
+  maxSizeAndroid: 512
+  resizeAlgorithmAndroid: 0
+  formatAndroid: 45
+  compressionAndroid: 50
+  isOverrideEnabledAndroid: 1
+  maxSizeIOS: 8192
+  resizeAlgorithmIOS: 0
+  formatIOS: 4
+  compressionIOS: 50
+  isOverrideEnabledIOS: 0
